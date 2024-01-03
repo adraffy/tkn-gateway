@@ -1,5 +1,5 @@
 import {ethers} from 'ethers';
-import {buf_from_hex} from './utils.js';
+import {log, buf_from_hex} from './utils.js';
 import {L2_STORAGE_ADDRESS} from './config.js';
 
 const provider = new ethers.JsonRpcProvider('https://sepolia.base.org', 84532, {staticNetwork: true});
@@ -33,7 +33,7 @@ const KEYS = [
 //const HASHED_KEYS = KEYS.map(k => ethers.id(k));
 const KEY_INDEX_MAP = new Map(KEYS.map((k, i) => [k, i]));
 
-const inflight = new Map();
+const cache = new Map();
 
 class Record {
 	constructor(nonce, values) {
@@ -63,17 +63,24 @@ export async function fetch_record(labels) {
 	if (labels.pop() !== 't-k-n') return;
 	//let node = ethers.id(labels.join('.'));	
 	let node = labels.join('.');
-	let p = inflight.get(node);
+	let p = cache.get(node);
+	if (Array.isArray(p)) {
+		if (p[0] > Date.now()) return p[1];
+		p = null;
+	}
 	if (!p) {
 		p = (async () => {
+			let rec;
 			try {
+				log(`Fetch ${node}`);
 				let {nonce, vs} = await contract.getBatchData(node, KEYS);
-				if (nonce) return new Record(nonce, vs);
+				if (nonce) rec = new Record(nonce, vs);
+				return rec;
 			} finally {
-				inflight.delete(node);
+				cache.set(node, [Date.now() + 5000, rec]);
 			}
 		})();
-		inflight.set(node, p);
+		cache.set(node, p);
 	}
 	return p;	
 }
