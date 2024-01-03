@@ -1,0 +1,79 @@
+import {ethers} from 'ethers';
+import {buf_from_hex} from './utils.js';
+import {L2_STORAGE_ADDRESS} from './config.js';
+
+const provider = new ethers.JsonRpcProvider('https://sepolia.base.org', 84532, {staticNetwork: true});
+
+const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
+	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
+], provider);
+
+// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
+const COIN_MAP = new Map([
+	[60, 'contractAddress'],
+	[614, 'op_address'],
+	[9001, 'arb1_address']
+]);
+
+// https://docs.tkn.xyz/developers/dataset
+const KEYS = [
+	'name',
+	'description',
+	'avatar',
+	'url',
+	'notice',
+	'decimals',
+	'twitter',
+	'github',
+	'dweb',
+	'version',
+	...COIN_MAP.values(),
+];
+
+//const HASHED_KEYS = KEYS.map(k => ethers.id(k));
+const KEY_INDEX_MAP = new Map(KEYS.map((k, i) => [k, i]));
+
+const inflight = new Map();
+
+class Record {
+	constructor(nonce, values) {
+		this.nonce = nonce;
+		this.values = values;
+	}
+	getData(key) {
+		let i = KEY_INDEX_MAP.get(key);
+		return Number.isInteger(i) ? this.values[i] : null;
+	}
+	getAddr(coinType) {
+		return this.getData(COIN_MAP.get(coinType));
+	}
+	getText(key) {
+		return buf_from_hex(this.getData(key))?.toString();
+	}
+	getContentHash() {
+		return this.getData('dweb');
+	}
+	entries() {
+		return this.values.map((v, i) => [KEYS[i], v]);
+	}
+}
+
+export async function fetch_record(labels) {
+	if (labels.pop() !== 'eth') return;
+	if (labels.pop() !== 't-k-n') return;
+	//let node = ethers.id(labels.join('.'));	
+	let node = labels.join('.');
+	let p = inflight.get(node);
+	if (!p) {
+		p = (async () => {
+			try {
+				let {nonce, vs} = await contract.getBatchData(node, KEYS);
+				if (nonce) return new Record(nonce, vs);
+			} finally {
+				inflight.delete(node);
+			}
+		})();
+		inflight.set(node, p);
+	}
+	return p;	
+}
