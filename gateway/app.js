@@ -1,14 +1,14 @@
 import {createServer} from 'node:http';
 import './http.js';
-import {log, buf_from_hex, method_int32} from './utils.js';
+import {log, is_hex, is_address, buf_from_hex, method_int32} from './utils.js';
 import {handle_resolve} from './ensip10.js';
-import {fetch_record} from './storage.js';
+//import {fetch_record} from './evm-storage.js';
+import {fetch_record} from './json-storage.js';
 import {HTTP_PORT, L1_RESOLVER_ADDRESS} from './config.js';
 
 const METHOD_resolve = method_int32('resolve(bytes,bytes)');
 
 const http = createServer(async (req, reply) => {
-	log(req.method, req.url);
 	try {
 		let url = new URL(req.url, 'http://a');
 		reply.setHeader('access-control-allow-origin', '*');
@@ -34,7 +34,7 @@ const http = createServer(async (req, reply) => {
 			}
 		}
 	} catch (err) {
-		console.log(err);
+		log(req.method, req.url, err);
 		reply.statusCode = 500;
 		return reply.end(err.message);
 	}
@@ -47,14 +47,14 @@ log(`Listening on ${http.address().port}`);
 async function handle_ccip(req, reply) {
 	try {
 		let {sender, data} = await req.read_json();
-		if (!/^0x[0-9a-f]{40}$/i.test(sender)) throw 'invalid sender';
-		if (!/^0x[0-9a-f]{8,}$/i.test(data)) throw 'invalid data';
+		if (!is_address(sender)) throw 'invalid sender';
+		if (!is_hex(data)) throw 'invalid data';
 		if (sender.localeCompare(L1_RESOLVER_ADDRESS, undefined, {sensitivity: 'base'})) {
 			reply.statusCode = 404;
 			return reply.json({message: 'unexpected contract'});
 		}
 		data = buf_from_hex(data);
-		if (data.readUInt32BE() !== METHOD_resolve) throw `unsupported ccip method`;
+		if (data.length < 4 || data.readUInt32BE() !== METHOD_resolve) throw `unsupported ccip method`;
 		data = await handle_resolve(sender, data, fetch_record);
 		return reply.json({data});
 	} catch (err) {

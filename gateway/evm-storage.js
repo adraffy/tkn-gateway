@@ -1,19 +1,12 @@
 import {ethers} from 'ethers';
 import {log, buf_from_hex} from './utils.js';
-import {L2_STORAGE_ADDRESS} from './config.js';
+import {L2_STORAGE_ADDRESS, COIN_MAP} from './config.js';
 
 const provider = new ethers.JsonRpcProvider('https://sepolia.base.org', 84532, {staticNetwork: true});
 
 const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
 	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
 ], provider);
-
-// https://github.com/satoshilabs/slips/blob/master/slip-0044.md
-const COIN_MAP = new Map([
-	[60, 'contractAddress'],
-	[614, 'op_address'],
-	[9001, 'arb1_address']
-]);
 
 // https://docs.tkn.xyz/developers/dataset
 const KEYS = [
@@ -72,7 +65,7 @@ export async function fetch_record(labels) {
 		p = (async () => {
 			let rec;
 			try {
-				log(`Fetch ${node}`);
+				log('fetch()', node);
 				let {nonce, vs} = await contract.getBatchData(node, KEYS);
 				if (nonce) rec = new Record(nonce, vs);
 				return rec;
