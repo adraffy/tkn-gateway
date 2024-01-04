@@ -22,9 +22,9 @@ class Record {
 	}
 }
 
-let db;
+let root;
 watch(DB_FILE, () => {
-	db = null;
+	root = null;
 });
 
 function tree_from_json(obj, parent, path) {
@@ -53,15 +53,14 @@ function tree_from_json(obj, parent, path) {
 
 async function load() {
 	try {
-		db = tree_from_json(JSON.parse(await readFile(DB_FILE)), null, []);
+		root = tree_from_json(JSON.parse(await readFile(DB_FILE)), null, []);
 		log(`Database: reloaded`);
-		print_tree(db);
+		print_tree(root);
 	} catch (err) {
 		log(`Database Error: ${err.message}`);
 		console.log(err);
 	}
 }
-
 
 function print_tree(node, indent = 0) {
 	console.log('  '.repeat(indent) + (node.path || '[root]'));
@@ -73,11 +72,11 @@ function print_tree(node, indent = 0) {
 export async function fetch_record(labels) {
 	if (labels.pop() !== 'eth') return;
 	if (labels.pop() !== 't-k-n') return;
-	if (!db) db = load();
-	let cur = db;
-	await cur;
-	while (cur && labels.length) {
-		cur = cur.get(labels.pop());
+	if (!root) root = load();
+	let node = root;
+	await node;
+	while (node && labels.length) {
+		node = node.get(labels.pop());
 	}
-	return cur?.rec;
+	return node?.rec;
 }
