@@ -1,6 +1,7 @@
 {
 	"type": "module",
 	"dependencies": {
+		"@ensdomains/address-encoder": "^0.2.22",
 		"ethers": "^6.9.2"
 	}
 }

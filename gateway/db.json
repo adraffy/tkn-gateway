@@ -1,45 +1,52 @@
 {
-	".": {
-		"name": "tkn Resolver",
-		"avatar": "https://gateway.tkn.xyz/ipfs/bafybeietl72akqaxu63gzkzud3awhr3s7hakcgtlkgq4xuutbyi5d7myqi",
-		"contractAddress": "0xF2C43c6389638Fc07b31FC78Ba06928a029bFCAB"
-	},
-	"💎️": {
-		"contractAddress": "0xFD50b031E778fAb33DfD2Fc3Ca66a1EeF0652165"
-	},
-	"base": {
+	"basenames": ["tkn.eth", "t-k-n.eth"],
+	"root": {
 		".": {
-			"name": "Base Resolver",
-			"avatar": "https://images.mirror-media.xyz/publication-images/cgqxxPdUFBDjgKna_dDir.png"
+			"name": "tkn Resolver",
+			"avatar": "https://gateway.tkn.xyz/ipfs/bafybeietl72akqaxu63gzkzud3awhr3s7hakcgtlkgq4xuutbyi5d7myqi",
+			"contractAddress": "0xF2C43c6389638Fc07b31FC78Ba06928a029bFCAB"
 		},
-		"uni": {
-			"ticker": "UNI",
-			"name": "Uniswappp",
-			"decimals": "188",
-			"contractAddress": "0x51050ec063d393217B436747617aD1C2285Aeeee"
+		"💎️": {
+			"contractAddress": "0xFD50b031E778fAb33DfD2Fc3Ca66a1EeF0652165"
 		},
-		"raffy": {
-			"contractAddress": "0x51050ec063d393217B436747617aD1C2285Aeeee",
-			"avatar": "https://raffy.antistupid.com/ens.jpg"
-		},
-		"aave $aave": {
-			"ticker": "AAVE",
-			"name": "Aave new",
-			"op_address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
-			"bnb_address": "0x51050ec063d393217B436747617aD1C2285Aeeee"
-		},
-		"chz $chz chiliz": {
-			"ticker": "CHZ",
-			"name": "Chiliz-updated",
-			"description": "This is the CHZ token",
-			"url": "https://www.chiliz.com",
-			"contractAddress": "0x3506424F91fD33084466F402d5D97f05F8e3b4AF",
-			"decimals": "18",
-			"com.twitter": "chiliz",
-			"com.github": "chiliz",
-			"dweb": "12D3KooWAFvcVupiQd91Hju1sFKCK5TvzkQ6NfQfMFtq46dMB4Yf",
-			"op_address": "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4",
-			"avatar": "ipfs://QmeU8jJeCLYDaSXdVBd6PVsohKbCYfgQtaFEvdVomneDQ5"
+		"base": {
+			".": {
+				"name": "Base Resolver",
+				"avatar": "https://images.mirror-media.xyz/publication-images/cgqxxPdUFBDjgKna_dDir.png",
+				"contractAddress": "0xF2C43c6389638Fc07b31FC78Ba06928a029bFCAB",
+				"btc_address": "bc1qjqg9slurvjukfl92wp58y94480fvh4uc2pwa6n",
+				"ltc_address": "ltc1qedz8tppwy2snqu305cjs0c3ya2tk4j6u634q4t",
+				"doge_address": "DQ5kE8puJbqdCw424QXM6hR9rn1argyM6z"
+			},
+			"uni": {
+				"ticker": "UNI",
+				"name": "Uniswappp",
+				"decimals": "188",
+				"contractAddress": "0x51050ec063d393217B436747617aD1C2285Aeeee"
+			},
+			"raffy": {
+				"contractAddress": "0x51050ec063d393217B436747617aD1C2285Aeeee",
+				"avatar": "https://raffy.antistupid.com/ens.jpg"
+			},
+			"aave $aave": {
+				"ticker": "AAVE",
+				"name": "Aave new",
+				"op_address": "0xDA10009cBd5D07dd0CeCc66161FC93D7c9000da1",
+				"bnb_address": "0x51050ec063d393217B436747617aD1C2285Aeeee"
+			},
+			"chz $chz chiliz": {
+				"ticker": "CHZ",
+				"name": "Chiliz-updated",
+				"description": "This is the CHZ token",
+				"url": "https://www.chiliz.com",
+				"contractAddress": "0x3506424F91fD33084466F402d5D97f05F8e3b4AF",
+				"decimals": "18",
+				"com.twitter": "chiliz",
+				"com.github": "chiliz",
+				"dweb": "12D3KooWAFvcVupiQd91Hju1sFKCK5TvzkQ6NfQfMFtq46dMB4Yf",
+				"op_address": "0x8700dAec35aF8Ff88c16BdF0418774CB3D7599B4",
+				"avatar": "ipfs://QmeU8jJeCLYDaSXdVBd6PVsohKbCYfgQtaFEvdVomneDQ5"
+			}
 		}
 	}
 }
