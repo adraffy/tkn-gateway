@@ -117,11 +117,12 @@ async function load() {
 		root_node.import_from_json(root);
 
 		// create reverse for each chain
+		let reverse_node = root_node.create('addr');
 		for (let coin of COINS) {
 			if (!coin.chain) continue;
 			let recs = [...root_node.find(rec => rec.map.has(coin.type))];
 			if (!recs.length) continue;
-			let node = root_node.create(`addr${coin.chain}`);
+			let node = reverse_node.create(`${coin.chain}`);
 			for (let rec of recs) {
 				let label = rec.map.get(coin.type).toString('hex');
 				if (!node.has(label)) { // use the first match
