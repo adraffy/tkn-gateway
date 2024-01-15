@@ -118,13 +118,14 @@ async function load() {
 
 		// create reverse for each chain
 		let reverse_node = root_node.create('addr');
+		let records = [...root_node.find()];
 		for (let coin of COINS) {
 			if (!coin.chain) continue;
-			let recs = [...root_node.find(rec => rec.map.has(coin.type))];
-			if (!recs.length) continue;
 			let node = reverse_node.create(`${coin.chain}`);
-			for (let rec of recs) {
-				let label = rec.map.get(coin.type).toString('hex');
+			for (let rec of records) {
+				let address = rec.map.get(coin.type);
+				if (!address) continue;
+				let label = address.toString('hex');
 				if (!node.has(label)) { // use the first match
 					node.create(label).rec = rec;
 				}

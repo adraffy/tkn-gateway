@@ -1,3 +1,4 @@
+import {ethers} from 'ethers';
 import {fetch_record} from './json-storage.js';
 //import {fetch_record} from './evm-storage.js';
 

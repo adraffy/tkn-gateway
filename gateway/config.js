@@ -14,6 +14,7 @@ export const COINS = [
 	{chain: 10, key: 'op_address'},
 	{chain: 56, key: 'bnb_address'},
 	{chain: 139, key: 'poly_address'},
+	{chain: 501, key: 'solana_address'},
 	{chain: 42161, key: 'arb1_address'}
 ];
 for (let coin of COINS) {	
