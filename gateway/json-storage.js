@@ -2,26 +2,78 @@ import {readFile} from 'node:fs/promises';
 import {watch} from 'node:fs';
 import {log} from './utils.js';
 import {ethers} from 'ethers';
-import {COIN_MAP, REVERSE_COIN_MAP} from './config.js';
-import {formatsByCoinType} from '@ensdomains/address-encoder';
+import {COINS} from './config.js';
 
 const DB_FILE = new URL('./db.json', import.meta.url);
+const COIN_MAP = new Map(COINS.map(x => [x.key, x]));
+
+class Node extends Map {
+	constructor(parent, label) {
+		super();
+		this.parent = parent;
+		this.label = label;
+	}
+	create(label) {
+		if (this.has(label)) throw new Error(`duplicate node: ${this.path} => ${label}`);
+		let node = new Node(this, label);
+		this.set(label, node);
+		return node;
+	}
+	import_from_json(json) {
+		if (typeof json !== 'object' || Array.isArray(json)) throw new Error('expected object');
+		let rec = json['.'];
+		if (rec) {
+			this.rec = new Record(rec);
+			for (let [ks, v] of Object.entries(json)) {
+				ks = ks.trim();
+				if (!ks || ks === '.') continue;
+				for (let k of ks.split(/\s+/)) {
+					k = ethers.ensNormalize(k);
+					this.create(k).import_from_json(v);
+				}
+			}
+		} else {
+			this.rec = new Record(json);
+		}
+	}
+	*find(predicate) {
+		let stack = [this];
+		while (stack.length) {
+			let node = stack.pop();
+			let {rec} = node;
+			if (rec && (!predicate || predicate(rec))) yield rec;
+			stack.push(...node.values());
+		}
+	}
+	get path() {
+		let v = [];
+		for (let node = this; node.parent; node = node.parent) {
+			v.push(node.label);
+		}
+		return v.join('.');
+	}
+	print(indent = 0) {
+		console.log('  '.repeat(indent) + this.label);
+		for (let x of this.values()) {
+			x.print(indent + 1);
+		}
+	}
+}
 
 class Record {
 	constructor(obj, parent) {
 		this.map = new Map(Object.entries(obj).map(([k, v]) => {
-			let coin = REVERSE_COIN_MAP.get(k);
-			if (Number.isInteger(coin)) {
-				let format = formatsByCoinType[coin];
-				if (!format) throw new Error(`unknown coin type: ${k} => ${coin}`);
-				v = format.decoder(v);
+			let coin = COIN_MAP.get(k);
+			if (coin) {
+				k = coin.type;
+				v = coin.format.decoder(v);
 			}
 			return [k, v];
 		}));
 		this.parent = parent;
 	}
-	getAddr(coinType) {
-		return this.map.get(COIN_MAP.get(coinType));
+	getAddr(coin) {
+		return this.map.get(coin);
 	}
 	getText(key) {
 		return this.map.get(key);
@@ -38,59 +90,53 @@ watch(DB_FILE, () => {
 
 await load(); // preload database
 
-function tree_from_json(obj, parent, path) {
-	if (typeof obj !== 'object' || Array.isArray(obj)) return;	
-	let rec = obj['.'];
-	let node = new Map();
-	node.parent = parent;
-	node.path = path.join('.');
-	if (rec) {
-		node.rec = new Record(rec);
-		for (let [ks, v] of Object.entries(obj)) {
-			ks = ks.trim();
-			if (!ks || ks === '.') continue;
-			for (let k of ks.split(/\s+/)) {
-				k = ethers.ensNormalize(k);
-				path.push(k);
-				node.set(k, tree_from_json(v, node, path));
-				path.pop();
+function tree_from_names(names) {
+	let root = new Map();
+	for (let name of names) {
+		let node = root;
+		for (let label of ethers.ensNormalize(name).split('.').reverse()) {
+			let next = node.get(label);
+			if (!next) {
+				next = new Map();
+				node.set(label, next);
 			}
+			node = next;
 		}
-	} else {
-		node.rec = new Record(obj);
 	}
-	return node;
+	return root;
 }
 
 async function load() {
 	try {
 		let {basenames, root} = JSON.parse(await readFile(DB_FILE));
-		let base = new Map();
-		for (let name of basenames) {
-			let node = base;
-			for (let label of ethers.ensNormalize(name).split('.').reverse()) {
-				let next = node.get(label);
-				if (!next) {
-					next = new Map();
-					node.set(label, next);
+
+		let base = tree_from_names(basenames);
+
+		// build tree from json
+		let root_node = new Node(null, '[root]');
+		root_node.import_from_json(root);
+
+		// create reverse for each chain
+		for (let coin of COINS) {
+			if (!coin.chain) continue;
+			let recs = [...root_node.find(rec => rec.map.has(coin.type))];
+			if (!recs.length) continue;
+			let node = root_node.create(`addr${coin.chain}`);
+			for (let rec of recs) {
+				let label = rec.map.get(coin.type).toString('hex');
+				if (!node.has(label)) { // use the first match
+					node.create(label).rec = rec;
 				}
-				node = next;
 			}
 		}
-		let node = tree_from_json(root, null, [])
-		db = {base, node};
+
+		db = {base, node: root_node};
 		log(`Database: reloaded`);
 		console.log('Basenames: ', basenames);
-		print_tree(node);
+		root_node.print();
+
 	} catch (err) {
 		log('Database Error', err);
-	}
-}
-
-function print_tree(node, indent = 0) {
-	console.log('  '.repeat(indent) + (node.path || '[root]'));
-	for (let x of node.values()) {
-		print_tree(x, indent + 1);
 	}
 }
 

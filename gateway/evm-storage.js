@@ -1,12 +1,8 @@
 import {ethers} from 'ethers';
 import {log, buf_from_hex} from './utils.js';
-import {L2_STORAGE_ADDRESS, COIN_MAP} from './config.js';
+import {L2_STORAGE_ADDRESS, COINS} from './config.js';
 
-const provider = new ethers.JsonRpcProvider('https://sepolia.base.org', 84532, {staticNetwork: true});
-
-const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
-	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
-], provider);
+const COIN_MAP = new Map(COINS.map(x => [x.type, x.key]));
 
 // https://docs.tkn.xyz/developers/dataset
 const KEYS = [
@@ -25,6 +21,11 @@ const KEYS = [
 
 //const HASHED_KEYS = KEYS.map(k => ethers.id(k));
 const KEY_INDEX_MAP = new Map(KEYS.map((k, i) => [k, i]));
+
+const provider = new ethers.JsonRpcProvider('https://sepolia.base.org', 84532, {staticNetwork: true});
+const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
+	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
+], provider);
 
 const cache = new Map();
 
