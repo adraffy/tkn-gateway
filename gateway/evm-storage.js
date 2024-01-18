@@ -1,8 +1,8 @@
 import {ethers} from 'ethers';
 import {log, buf_from_hex} from './utils.js';
-import {L2_STORAGE_ADDRESS, COINS} from './config.js';
+import {L2_RPC_URL, L2_CHAIN_ID, L2_STORAGE_ADDRESS, COINS} from './config.js';
 
-const COIN_MAP = new Map(COINS.map(x => [x.type, x.key]));
+const COIN_MAP = new Map(COINS.map(x => [x.type, x]));
 
 // https://docs.tkn.xyz/developers/dataset
 const KEYS = [
@@ -16,13 +16,12 @@ const KEYS = [
 	'github',
 	'dweb',
 	'version',
-	...COIN_MAP.values(),
+	...[...COIN_MAP.values()].map(x => x.key),
 ];
 
-//const HASHED_KEYS = KEYS.map(k => ethers.id(k));
 const KEY_INDEX_MAP = new Map(KEYS.map((k, i) => [k, i]));
 
-const provider = new ethers.JsonRpcProvider('https://sepolia.base.org', 84532, {staticNetwork: true});
+const provider = new ethers.JsonRpcProvider(L2_RPC_URL, L2_CHAIN_ID, {staticNetwork: true});
 const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
 	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
 ], provider);
@@ -38,8 +37,12 @@ class Record {
 		let i = KEY_INDEX_MAP.get(key);
 		return Number.isInteger(i) ? this.values[i] : null;
 	}
-	getAddr(coinType) {
-		return this.getData(COIN_MAP.get(coinType));
+	getAddr(type) {
+		let coin = COIN_MAP.get(type);
+		if (!coin) return;
+		let v = this.getData(coin.key);
+		if (!v) return;
+		return coin.format.encoder(v);
 	}
 	getText(key) {
 		return buf_from_hex(this.getData(key))?.toString();
@@ -53,10 +56,9 @@ class Record {
 }
 
 export async function fetch_record(labels) {
-	if (labels.pop() !== 'eth') return;
-	if (labels.pop() !== 't-k-n') return;
-	//let node = ethers.id(labels.join('.'));	
-	let node = labels.join('.');
+	labels[labels.length-2] = 'tkn'; // raffy hack
+	//let node = labels.join('.');
+	let node = ethers.namehash(labels.join('.'));
 	let p = cache.get(node);
 	if (Array.isArray(p)) {
 		if (p[0] > Date.now()) return p[1];
@@ -77,4 +79,4 @@ export async function fetch_record(labels) {
 		cache.set(node, p);
 	}
 	return p;	
-}
+} 

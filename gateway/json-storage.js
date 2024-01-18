@@ -36,13 +36,21 @@ class Node extends Map {
 			this.rec = new Record(json);
 		}
 	}
-	*find(predicate) {
+	*find_records() {
 		let stack = [this];
 		while (stack.length) {
 			let node = stack.pop();
 			let {rec} = node;
-			if (rec && (!predicate || predicate(rec))) yield rec;
+			if (rec) yield rec;
 			stack.push(...node.values());
+		}
+	}
+	*find_nodes() {
+		let stack = [this];
+		while (stack.length) {
+			let node = stack.pop();
+			stack.push(...node.values());
+			yield node;
 		}
 	}
 	get path() {
@@ -55,6 +63,7 @@ class Node extends Map {
 	print(indent = 0) {
 		console.log('  '.repeat(indent) + this.label);
 		for (let x of this.values()) {
+			if (x.hidden) continue;
 			x.print(indent + 1);
 		}
 	}
@@ -118,7 +127,7 @@ async function load() {
 
 		// create reverse for each chain
 		let reverse_node = root_node.create('addr');
-		let records = [...root_node.find()];
+		let records = [...root_node.find_records()];
 		for (let coin of COINS) {
 			if (!coin.chain) continue;
 			let node = reverse_node.create(`${coin.chain}`);
@@ -130,6 +139,18 @@ async function load() {
 					node.create(label).rec = rec;
 				}
 			}
+		}
+
+		// create index nodes
+		for (let node of root_node.find_nodes()) {
+			if (!node.size) continue;
+			let rec = new Record({
+				notice: `${node.size}`,
+				description: [...node.keys()].join(', ')
+			}, node);
+			let index_node = node.create('_');
+			index_node.rec = rec;
+			index_node.hidden = true;
 		}
 
 		db = {base, node: root_node};

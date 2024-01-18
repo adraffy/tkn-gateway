@@ -2,8 +2,8 @@ import {createServer} from 'node:http';
 import './http.js';
 import {log, is_hex, is_address, buf_from_hex, method_int32} from './utils.js';
 import {handle_resolve} from './ensip10.js';
-//import {fetch_record} from './evm-storage.js';
-import {fetch_record} from './json-storage.js';
+import {fetch_record} from './evm-storage.js';
+//import {fetch_record} from './json-storage.js';
 import {HTTP_PORT, L1_RESOLVER_ADDRESS} from './config.js';
 
 const METHOD_resolve = method_int32('resolve(bytes,bytes)');
