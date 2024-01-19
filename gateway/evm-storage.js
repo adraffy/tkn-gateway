@@ -1,9 +1,14 @@
 import {ethers} from 'ethers';
-import {log, buf_from_hex, is_address} from './utils.js';
+import {log, buf_from_hex} from './utils.js';
 import {L2_RPC_URL, L2_CHAIN_ID, L2_STORAGE_ADDRESS, COINS} from './config.js';
 
 const COIN_MAP = new Map(COINS.map(x => [x.type, x]));
 
+const CACHE_MS = 5000;
+
+const ALIAS_KEY = 'alias';
+const CONTENTHASH_KEY = 'dweb';
+		
 // https://docs.tkn.xyz/developers/dataset
 export const KEYS = [
 	'name',
@@ -19,8 +24,6 @@ export const KEYS = [
 	...[...COIN_MAP.values()].map(x => x.key),
 ];
 
-const KEY_INDEX_MAP = new Map(KEYS.map((k, i) => [k, i]));
-
 const provider = new ethers.JsonRpcProvider(L2_RPC_URL, L2_CHAIN_ID, {staticNetwork: true});
 const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
 	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
@@ -29,13 +32,12 @@ const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
 const cache = new Map();
 
 class Record {
-	constructor(nonce, values) {
+	constructor(nonce, map) {
 		this.nonce = nonce;
-		this.values = values;
+		this.map = map;
 	}
 	getData(key) {
-		let i = KEY_INDEX_MAP.get(key);
-		return Number.isInteger(i) ? this.values[i] : null;
+		return this.map.get(key);
 	}
 	getAddr(type) {
 		let coin = COIN_MAP.get(type);
@@ -45,34 +47,37 @@ class Record {
 		return coin.format.encoder(value);
 	}
 	getText(key) {
-		return buf_from_hex(this.getData(key))?.toString();
+		let hex = this.getData(key);
+		return hex ? buf_from_hex(hex).toString() : null;
 	}
 	getContentHash() {
-		return this.getData('dweb');
+		return this.getData(CONTENTHASH_KEY);
 	}
 	entries() {
-		return this.values.map((v, i) => [KEYS[i], v]);
+		return [...this.map];
 	}
 }
 
 
 export async function fetch_record(labels) {
-	if (/^(0x)?[0-9a-f]{40}$/.test(labels[0])) { // leading label is address-like
-		labels[0] = labels[0].slice(-40); // remove "0x" (if it exists)
-		let rec = await get_record(labels);
+	let first = labels[0];
+	if (/^(0x)?[0-9a-f]{40}$/.test(first)) { // leading label is address-like
+		if (!first.startsWith('0x')) labels[0] = `0x${first}`; // add if missing
+		let rec = await get_record(labels, [ALIAS_KEY]);
 		if (!rec) return; // no record
-		let alias = rec.getText('alias');
+		let alias = rec.getText(ALIAS_KEY);
 		if (!alias) return; // no alias
 		labels = alias.split('.'); // replace
 	}
-	return get_record(labels);
+	return get_record(labels, KEYS);
 } 
 
-async function get_record(labels) {
+async function get_record(labels, keys) {
 	if (process.env.USER === 'raffy') {
 		labels[labels.length-2] = 'tkn';
 	}
-	let node = ethers.namehash(labels.join('.'));
+	let name = labels.join('.');
+	let node = ethers.namehash(name);
 	let p = cache.get(node);
 	if (Array.isArray(p)) {
 		if (p[0] > Date.now()) return p[1];
@@ -82,12 +87,12 @@ async function get_record(labels) {
 		p = (async () => {
 			let rec;
 			try {
-				log('fetch()', node);
-				let {nonce, vs} = await contract.getBatchData(node, KEYS);
-				if (nonce) rec = new Record(nonce, vs);
+				log('fetch()', name, node);
+				let {nonce, vs} = await contract.getBatchData(node, keys);
+				if (nonce) rec = new Record(nonce, new Map(keys.map((k, i) => [k, vs[i]])));
 				return rec;
 			} finally {
-				cache.set(node, [Date.now() + 5000, rec]);
+				cache.set(node, [Date.now() + CACHE_MS, rec]);
 			}
 		})();
 		cache.set(node, p);
