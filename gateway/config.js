@@ -14,7 +14,7 @@ export const L2_CHAIN_ID = 139;
 
 // https://github.com/satoshilabs/slips/blob//master/slip-0044.md
 export const COINS = [
-	{type: 60, chain: 1, key: 'contractAddress'},
+	{type: 60, chain: 1, key: 'address'},
 	{type: 0, key: 'btc_address'},
 	{type: 2, key: 'ltc_address'},
 	{type: 3, key: 'doge_address'},
@@ -22,7 +22,9 @@ export const COINS = [
 	{chain: 56, key: 'bnb_address'},
 	{chain: 139, key: 'poly_address'},
 	{chain: 501, key: 'solana_address'},
-	{chain: 42161, key: 'arb1_address'}
+	{chain: 42161, key: 'arb1_address'},
+	{chain: 100, key: 'gnosis_address'},
+	{type: 700, key: 'gnosis_address', legacy: true},
 ];
 for (let coin of COINS) {	
 	try {
