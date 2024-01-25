@@ -63,16 +63,9 @@ contract L1Resolver is Ownable, IERC165, IExtendedResolver, IAddrResolver, IAddr
 		bytes memory encoded = abi.encodeWithSelector(IExtendedResolver.resolve.selector, name, data);
 		string[] memory urls = new string[](1); 
 		urls[0] = ccipURL;
-		revert OffchainLookup(address(this), urls, encoded, this.callback.selector, encoded);
+		revert OffchainLookup(address(this), urls, encoded, this.resolveCallback.selector, encoded);
 	}
-	function multicall(bytes[] calldata calls) external view returns (bytes[] memory) {
-		bytes memory encoded = abi.encodeWithSelector(IMulticallable.multicall.selector, calls);
-		string[] memory urls = new string[](1); 
-		urls[0] = ccipURL;
-		revert OffchainLookup(address(this), urls, encoded, this.callback.selector, encoded);
-	}
-
-	function callback(bytes calldata response, bytes calldata extraData) external view returns(bytes memory) {
+	function resolveCallback(bytes calldata response, bytes calldata extraData) external view returns (bytes memory) {
 		(bytes memory sig, uint64 expires, bytes memory result) = abi.decode(response, (bytes, uint64, bytes));
 		require(expires > block.timestamp, "expired");
 		bytes32 hash = keccak256(abi.encodePacked(address(this), expires, keccak256(extraData), keccak256(result)));
@@ -81,4 +74,19 @@ contract L1Resolver is Ownable, IERC165, IExtendedResolver, IAddrResolver, IAddr
 		return result;
 	}
 
+	function multicall(bytes[] calldata calls) external view returns (bytes[] memory) {
+		bytes memory encoded = abi.encodeWithSelector(IMulticallable.multicall.selector, calls);
+		string[] memory urls = new string[](1); 
+		urls[0] = ccipURL;
+		revert OffchainLookup(address(this), urls, encoded, this.multicallCallback.selector, encoded);
+	}
+	function multicallCallback(bytes calldata response, bytes calldata extraData) external view returns (bytes[] memory) {
+		(bytes memory sig, uint64 expires, bytes memory result) = abi.decode(response, (bytes, uint64, bytes));
+		require(expires > block.timestamp, "expired");
+		bytes32 hash = keccak256(abi.encodePacked(address(this), expires, keccak256(extraData), keccak256(result)));
+		address signer = ECDSA.recover(hash, sig);
+		require(signer == ccipSigner, "untrusted");		
+		return abi.decode(result, (bytes[]));
+	}
+	
 }
