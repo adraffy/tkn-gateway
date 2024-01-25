@@ -2,9 +2,8 @@ import {ethers} from 'ethers';
 import {log, buf_from_hex} from './utils.js';
 import {L2_RPC_URL, L2_CHAIN_ID, L2_STORAGE_ADDRESS, COINS} from './config.js';
 
-const COIN_MAP = new Map(COINS.map(x => [x.type, x]));
-
-const CACHE_MS = 5000;
+const REC_CACHE_MS = 5000;
+const REC_CACHE = new Map();
 
 const ALIAS_KEY = 'alias';
 const CONTENTHASH_KEY = 'dweb';
@@ -19,17 +18,15 @@ export const KEYS = [
 	'decimals',
 	'twitter',
 	'github',
-	'dweb',
+	CONTENTHASH_KEY,
 	'version',
-	...[...COIN_MAP.values()].map(x => x.key),
+	...COINS.map(x => x.key),
 ];
 
 const provider = new ethers.JsonRpcProvider(L2_RPC_URL, L2_CHAIN_ID, {staticNetwork: true});
 const contract = new ethers.Contract(L2_STORAGE_ADDRESS, [
 	`function getBatchData(string calldata node, string[] calldata keys) external view returns (uint256 nonce, bytes[] memory vs)`
 ], provider);
-
-const cache = new Map();
 
 class Record {
 	constructor(nonce, map) {
@@ -39,8 +36,7 @@ class Record {
 	getData(key) {
 		return this.map.get(key);
 	}
-	getAddr(type) {
-		let coin = COIN_MAP.get(type);
+	getAddr(type, coin) {
 		if (!coin) return;
 		let value = this.getText(coin.key);
 		if (!value) return;
@@ -48,7 +44,7 @@ class Record {
 	}
 	getText(key) {
 		let hex = this.getData(key);
-		return hex ? buf_from_hex(hex).toString() : null;
+		return hex ? ethesr.toUtf8String(hex) : null;
 	}
 	getContentHash() {
 		return this.getData(CONTENTHASH_KEY);
@@ -60,6 +56,7 @@ class Record {
 
 
 export async function fetch_record(labels) {
+	labels = labels.slice(); // make a copy
 	let first = labels[0];
 	if (/^(0x)?[0-9a-f]{40}$/.test(first)) { // leading label is address-like
 		if (!first.startsWith('0x')) labels[0] = `0x${first}`; // add if missing
@@ -78,11 +75,7 @@ async function get_record(labels, keys) {
 	}
 	let name = labels.join('.');
 	let node = ethers.namehash(name);
-	let p = cache.get(node);
-	if (Array.isArray(p)) {
-		if (p[0] > Date.now()) return p[1];
-		p = null;
-	}
+	let p = REC_CACHE.get(node);
 	if (!p) {
 		p = (async () => {
 			let rec;
@@ -92,10 +85,14 @@ async function get_record(labels, keys) {
 				if (nonce) rec = new Record(nonce, new Map(keys.map((k, i) => [k, vs[i]])));
 				return rec;
 			} finally {
-				cache.set(node, [Date.now() + CACHE_MS, rec]);
+				setTimeout(() => {
+					REC_CACHE.delete(node);
+					log(`cache(${REC_CACHE.size})`, name);
+				}, REC_CACHE_MS).unref();
+				REC_CACHE.set(node, rec);
 			}
 		})();
-		cache.set(node, p);
+		REC_CACHE.set(node, p);
 	}
 	return p;
 }

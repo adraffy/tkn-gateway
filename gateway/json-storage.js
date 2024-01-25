@@ -74,15 +74,15 @@ class Record {
 		this.map = new Map(Object.entries(obj).map(([k, v]) => {
 			let coin = COIN_MAP.get(k);
 			if (coin) {
-				k = coin.type;
+				k = coin.type; // store addr under type
 				v = coin.format.decoder(v);
 			}
 			return [k, v];
 		}));
 		this.parent = parent;
 	}
-	getAddr(coin) {
-		return this.map.get(coin);
+	getAddr(type, coin) {
+		return this.map.get(type); // access addr under type
 	}
 	getText(key) {
 		return this.map.get(key);
@@ -167,6 +167,7 @@ export async function fetch_record(labels) {
 	if (!db) db = load();
 	await db;
 	let {node, base} = db;
+	labels = labels.slice(); // make a copy
 	while (base.size && labels.length) {
 		base = base.get(labels.pop());
 		if (!base) return; // no basename match
