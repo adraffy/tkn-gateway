@@ -1,0 +1,8 @@
+{
+	"type": "module",
+	"dependencies": {
+		"@ensdomains/address-encoder": "^0.2.22",
+		"@resolverworks/ezccip": "^0.0.2",
+		"ethers": "^6.9.2"
+	}
+}
