@@ -9,6 +9,14 @@
 		"💎️": {
 			"address": "0xFD50b031E778fAb33DfD2Fc3Ca66a1EeF0652165"
 		},
+		"off": {
+			"description": "Offchain Chonker",
+			"name": "Off-chain",
+			"avatar": "https://raffy.antistupid.com/ens.jpg",
+			"address": "0x51050ec063d393217B436747617aD1C2285Aeeee",
+			"btc_address": "bc1qjqg9slurvjukfl92wp58y94480fvh4uc2pwa6n",
+			"dweb": "0xe5010172002408011220c8a700c79100ff6d34c1be3d75729da863dbd4a86ec54b5347aaf9b88c4d137d"
+		},
 		"base": {
 			".": {
 				"name": "Base Resolver",

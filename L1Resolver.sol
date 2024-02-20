@@ -11,6 +11,7 @@ import {IAddressResolver} from "https://github.com/ensdomains/ens-contracts/blob
 import {ITextResolver} from "https://github.com/ensdomains/ens-contracts/blob/master/contracts/resolvers/profiles/ITextResolver.sol";
 import {IContentHashResolver} from "https://github.com/ensdomains/ens-contracts/blob/master/contracts/resolvers/profiles/IContentHashResolver.sol";
 import {IMulticallable} from "https://github.com/ensdomains/ens-contracts/blob/master/contracts/resolvers/IMulticallable.sol";
+import {BytesUtils} from "https://github.com/ensdomains/ens-contracts/blob/master/contracts/wrapper/BytesUtils.sol";
 
 contract L1Resolver is Ownable, IERC165, IExtendedResolver, IAddrResolver, IAddressResolver, ITextResolver, IContentHashResolver {
 
@@ -60,6 +61,16 @@ contract L1Resolver is Ownable, IERC165, IExtendedResolver, IAddrResolver, IAddr
 	error OffchainLookup(address sender, string[] urls, bytes callData, bytes4 callbackFunction, bytes extraData);
 
 	function resolve(bytes calldata name, bytes calldata data) external view returns (bytes memory) {
+		bytes32 alias = aliases[BytesUtils.namehash(name)];
+		if (alias != 0) {
+			address resolver = ENS(ENS_REGISTRY).resolver(alias);
+			if (resolver != address(0)) {
+				 (bool success, bytes memory v) = resolver.staticcall(data);
+				 if (success) {
+					return v;
+				 }
+			}
+		}
 		bytes memory encoded = abi.encodeWithSelector(IExtendedResolver.resolve.selector, name, data);
 		string[] memory urls = new string[](1); 
 		urls[0] = ccipURL;
