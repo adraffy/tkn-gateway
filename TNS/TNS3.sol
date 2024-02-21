@@ -44,26 +44,38 @@ contract TNS is Ownable, IERC165 {
 
 	// TKN dataset docs: https://docs.tkn.xyz/developers/querying-the-tns-dataset
 
-	// addTexts(["name","symbol","description","avatar","url","notice","decimals","twitter","github","chainID","coinType","version","tokenSupply","circulatingSupply","discord","forum","governance","snapshot","git");
-	// addCoins(
-	//	[".eth",".op",".arb",".avax",".bnb",".base",".cro",".ftm",".gno",".matic",".celo",".goerli",".sepolia",".holesky",".near",".sol",".trx",".zil"],
-	//  [60,2147483658,2147525809,2147526762,2147483704,2147492101,2147483673,2147483898,2147483748,2147483785,2147525868,2147483643,2136328537,2147500648,397,501,195,119]
-	//)
+	// deploy()
+	// 2m gas 
+	//
+	// addTexts()
+	// 1m gas
+	// ["name","symbol","description","avatar","url","notice","decimals","twitter","github","chainID","coinType","version","tokenSupply","circulatingSupply","discord","forum","governance","snapshot","git"]
+	//
+	// addCoins()
+	// 1m gas
+	// [".eth",".op",".arb",".avax",".bnb",".base",".cro",".ftm",".gno",".matic",".celo",".goerli",".sepolia",".holesky",".near",".sol",".trx",".zil"]
+	// [60,2147483658,2147525809,2147526762,2147483704,2147492101,2147483673,2147483898,2147483748,2147483785,2147525868,2147483643,2136328537,2147500648,397,501,195,119]
 
 	function setBasename(bytes calldata dnsname) onlyOwner external {
 		basename = dnsname;
 		emit BasenameChanged(dnsname);
 	}
 	function addText(string[] calldata names) onlyOwner external {
-		for (uint256 i; i < names.length; i += 1) {
-			addField(keccak256(bytes(names[i])), abi.encodePacked(KIND_TEXT, names[i]));
+		unchecked {
+			for (uint256 i; i < names.length; i += 1) {
+				addField(keccak256(bytes(names[i])), abi.encodePacked(KIND_TEXT, names[i]));
+			}
+			emit FieldsChanged();
 		}
 	}
 	function addCoins(string[] calldata names, uint64[] calldata coinTypes) onlyOwner external {
-		require(names.length == coinTypes.length);
-		for (uint256 i; i < names.length; i += 1) {
-			bytes memory v = abi.encodePacked(KIND_ADDR, coinTypes[i]);
-			addField(keccak256(v), abi.encodePacked(v, names[i]));
+		unchecked {
+			require(names.length == coinTypes.length);
+			for (uint256 i; i < names.length; i += 1) {
+				bytes memory v = abi.encodePacked(KIND_ADDR, coinTypes[i]);
+				addField(keccak256(v), abi.encodePacked(v, names[i]));
+			}
+			emit FieldsChanged();
 		}
 	}
 	function addField(bytes32 hash, bytes memory field) internal {
@@ -75,7 +87,6 @@ contract TNS is Ownable, IERC165 {
 				_fields[last] = abi.encodePacked(key);
 			}
 			_fields[key] = field;
-			emit FieldsChanged();
 		}
 	}
 	function removeFieldAt(uint256 i) onlyOwner external {
