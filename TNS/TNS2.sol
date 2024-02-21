@@ -47,8 +47,8 @@ contract TNS is Ownable, IERC165 {
 		addText("name");
 		addText("avatar");
 		addText("description");
-		addCoin("eth", 60);
-		addCoin("btc", 0);
+		addCoin("$eth", 60);
+		addCoin("$btc", 0);
 	}
 	function setBasename(bytes calldata dnsname) onlyOwner external {
 		basename = dnsname;
@@ -94,10 +94,11 @@ contract TNS is Ownable, IERC165 {
 				names[i] = string(v);
 			} else { //if (uint8(v[0]) == KIND_ADDR) {
 				assembly {
-					mstore(add(v, 8), sub(mload(v), 8))
-					v := add(v, 8)
+					mstore(add(v, 9), sub(mload(v), 9))
+					v := add(v, 9)
 				}
-				v[0] = '$';
+				// to enforce prefix, use offset 8 instead of 9 above
+				//v[0] = '$';
 				names[i] = string(v);
 			}
 		}
@@ -118,11 +119,7 @@ contract TNS is Ownable, IERC165 {
 				fs[i] = abi.encodeCall(WTF.text, (node, string(v)));
 			} else { //if (uint8(v[0]) == KIND_ADDR) {
 				uint256 coinType;
-				assembly {
-					coinType := mload(add(v, 9))
-					mstore(add(v, 9), sub(mload(v), 9))
-					v := add(v, 9)
-				}
+				assembly { coinType := mload(add(v, 9)) }
 				fs[i] = abi.encodeCall(WTF.addr, (node, uint64(coinType)));
 			}
 		}
