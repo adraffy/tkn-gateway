@@ -13,13 +13,13 @@ import {IContentHashResolver} from "@ensdomains/ens-contracts/contracts/resolver
 import {IMulticallable} from "@ensdomains/ens-contracts/contracts/resolvers/IMulticallable.sol";
 import {BytesUtils} from "@ensdomains/ens-contracts/contracts/wrapper/BytesUtils.sol";
 
-error OffchainLookup(address sender, string[] urls, bytes callData, bytes4 callbackFunction, bytes extraData);
+error OffchainLookup(address sender, string[] urls, bytes request, bytes4 callback, bytes carry);
 
 contract TNS is Ownable, IERC165 {
 	using BytesUtils for bytes;
 
 	function supportsInterface(bytes4 x) external pure returns (bool) {
-		return x == type(IERC165).interfaceId;
+		return x == type(IERC165).interfaceId || x == this.lookup.selector;
 	}
 
 	address constant ENS_REGISTRY = 0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e;
@@ -29,13 +29,12 @@ contract TNS is Ownable, IERC165 {
 	uint256 constant SLOT_FIELDS = 3;
 
 	uint8 constant KIND_FLAG_STRING    = 0x80;
-	uint8 constant KIND_FLAG_SKIP_4    = 0x40;
-	uint8 constant KIND_FLAG_ENCODED   = 0x20;
-	uint8 constant KIND_FLAG_NO_DECODE = 0x10;
+	uint8 constant KIND_FLAG_NO_DECODE = 0x40;
+	uint8 constant KIND_FLAG_SKIP_4    = 0x20;
+	uint8 constant KIND_FLAG_ENCODED   = 0x10;
 
-	uint8 constant KIND_TEXT = 0 | KIND_FLAG_STRING;
-	uint8 constant KIND_COIN = 1 | KIND_FLAG_SKIP_4;
-	uint8 constant KIND_0ARG = 2 | KIND_FLAG_SKIP_4;
+	uint8 constant KIND_TEXT = 0x01 | KIND_FLAG_STRING;
+	uint8 constant KIND_COIN = 0x02 | KIND_FLAG_SKIP_4;
 
 	struct KV {string k; string v; }
 
@@ -43,7 +42,7 @@ contract TNS is Ownable, IERC165 {
 	error Modified();
 
 	event FieldsChanged();
-	event BasenameChanged(string indexed dnsname);
+	event BasenameChanged(string indexed name);
 
 	// setters
 	function setBasename(string calldata name) onlyOwner external { 
@@ -68,7 +67,7 @@ contract TNS is Ownable, IERC165 {
 		unchecked {
 			uint256 fc;
 			assembly { fc := sload(SLOT_FIELD_COUNT) }
-			if (i >= fc) revert BadInput();        
+			if (i >= fc) revert BadInput();
 			fc -= 1;
 			setTiny(SLOT_FIELDS + i, getTiny(SLOT_FIELDS + fc));
 			assembly { sstore(SLOT_FIELD_COUNT, fc) }
@@ -107,9 +106,9 @@ contract TNS is Ownable, IERC165 {
 				bytes memory v = getTiny(SLOT_FIELDS + i);
 				uint256 kind = uint8(v[0]);
 				uint256 trim = (kind & KIND_FLAG_SKIP_4) != 0 ? 5 : 1;
-				uint256 arg0;      
+				uint256 arg0;
 				assembly {
-					arg0 := and(add(v, 5), 0xFFFFFFFF)
+					arg0 := and(mload(add(v, 5)), 0xFFFFFFFF)
 					mstore(add(v, trim), sub(mload(v), trim))
 					v := add(v, trim)
 				}
@@ -117,9 +116,9 @@ contract TNS is Ownable, IERC165 {
 					calls[i] = abi.encodeCall(ITextResolver.text, (node, string(v)));
 				} else if (kind == KIND_COIN) {
 					calls[i] = abi.encodeCall(IAddressResolver.addr, (node, arg0));
-				} else if (kind == KIND_0ARG) {
+				} else if ((kind & KIND_FLAG_SKIP_4) > 0) {
 					calls[i] = abi.encodeWithSelector(bytes4(uint32(arg0)), node);
-				} else {
+				} else if ((kind & KIND_FLAG_ENCODED) > 0) {
 					(, v) = abi.decode(v, (string, bytes));
 					assembly { mstore(add(v, 36), node) } // replace node
 					calls[i] = v;
@@ -131,11 +130,11 @@ contract TNS is Ownable, IERC165 {
 	// primary api
 	function lookup(string calldata tick) external view returns (KV[] memory) {
 		bytes memory name0 = getTiny(SLOT_BASENAME);
-		bytes32 node0 = dns_from_name(name0).namehash(0);
-		address resolver = ENS(ENS_REGISTRY).resolver(node0);
-		bytes memory name = dns_from_name(abi.encodePacked(tick, '.', name0));
+		bytes32 node0 = dns_from_ens(name0).namehash(0);
+		address resolver0 = ENS(ENS_REGISTRY).resolver(node0);
+		bytes memory name = dns_from_ens(abi.encodePacked(tick, '.', name0));
 		bytes32 node = name.namehash(0);
-		(bool ok, bytes memory v) = resolver.staticcall(abi.encodeCall(IExtendedResolver.resolve, (
+		(bool ok, bytes memory v) = resolver0.staticcall(abi.encodeCall(IExtendedResolver.resolve, (
 			name, 
 			abi.encodeCall(IMulticallable.multicall, (this.makeCalls(node)))
 		)));
@@ -145,48 +144,39 @@ contract TNS is Ownable, IERC165 {
 			mstore(add(v, 4), sub(mload(v), 4)) 
 			v := add(v, 4)
 		}
-		(, string[] memory urls, bytes memory callData, bytes4 callbackFunction, bytes memory extraData) = abi.decode(v, (address, string[], bytes, bytes4, bytes));
-		revert OffchainLookup(address(this), urls, callData, this.lookupCallback.selector, abi.encode(resolver, node, callbackFunction, extraData));
+		(, string[] memory urls, bytes memory request, bytes4 callback, bytes memory carry0) = abi.decode(v, (address, string[], bytes, bytes4, bytes));
+		revert OffchainLookup(address(this), urls, request, this.lookupCallback.selector, abi.encode(resolver0, node, callback, carry0));
 	}
-	function lookupCallback(bytes calldata response, bytes calldata wrappedData) external view returns (KV[] memory) {
-		(address resolver, bytes32 node, bytes4 callbackFunction, bytes memory extraData) = abi.decode(wrappedData, (address, bytes32, bytes4, bytes));
-		(bool ok, bytes memory v) = resolver.staticcall(abi.encodeWithSelector(callbackFunction, response, extraData));
+	function lookupCallback(bytes calldata response, bytes calldata carry) external view returns (KV[] memory) {
+		(address resolver0, bytes32 node, bytes4 callback, bytes memory carry0) = abi.decode(carry, (address, bytes32, bytes4, bytes));
+		(bool ok, bytes memory v) = resolver0.staticcall(abi.encodeWithSelector(callback, response, carry0));
 		if (!ok) assembly { revert(add(v, 32), mload(v)) }
 		return lookupOnchain(node, abi.decode(abi.decode(v, (bytes)), (bytes[])));
 	}
 	function lookupOnchain(bytes32 node, bytes[] memory values) internal view returns (KV[] memory kv) {
 		unchecked {
 			string[] memory names = fieldNames();
-			if (names.length != values.length) revert Modified();
-			bytes[] memory calls = this.makeCalls(node);
+			if (names.length != values.length) revert Modified(); // number of records are different (rare)
+			bytes[] memory calls = this.makeCalls(node); // technically these could be diff (extremely rare)
 			address resolver = ENS(ENS_REGISTRY).resolver(node);
 			uint256 n;
 			kv = new KV[](values.length);
-			for (uint256 i; i < values.length; i += 1) {      
+			for (uint256 i; i < values.length; i += 1) {
 				bytes memory v = getTiny(SLOT_FIELDS + i);
 				uint256 kind = uint8(v[0]);
 				bool ok;
-				if (resolver != address(0)) {
-					(ok, v) = resolver.staticcall(calls[i]);
+				if (resolver != address(0)) { // if there is resolver
+					(ok, v) = resolver.staticcall(calls[i]); // read record
 					if (ok) {
-						if (v.length != 0 && (kind & KIND_FLAG_NO_DECODE) == 0) {
-							v = abi.decode(v, (bytes));
-						}
-						if (isNull(v)) {
-							ok = false;
-						}
+						if (v.length != 0 && (kind & KIND_FLAG_NO_DECODE) == 0) v = abi.decode(v, (bytes));
+						if (isNull(v)) ok = false; // only use if non-null
 					}
 				}
-				if (!ok) {
+				if (!ok) { // no on-chain record, check ccip
 					v = values[i];
-					if (v.length != 0 && (kind & KIND_FLAG_NO_DECODE) == 0) {
-						v = abi.decode(v, (bytes));
-					}
-					if (isNull(v)) {
-						continue;
-					}
+					if (v.length != 0 && (kind & KIND_FLAG_NO_DECODE) == 0) v = abi.decode(v, (bytes));
+					if (isNull(v)) continue; // skip kv if null
 				}
-				if (v.length == 0) continue;
 				kv[n] = KV(names[i], (kind & KIND_FLAG_STRING) != 0 ? string(v) : toHex(v));
 				n += 1;
 			}
@@ -195,28 +185,27 @@ contract TNS is Ownable, IERC165 {
 	}
 
 	// utils
-	function dns_from_name(bytes memory str) internal pure returns (bytes memory dns) {
+	function dns_from_ens(bytes memory ens) internal pure returns (bytes memory dns) {
 		unchecked {
-			uint256 n = str.length;
-			 // [a.b  ]
-			 // [1a1b0]
-			dns = new bytes(n + 2);
+			// "aaa.bb.c" => "3a2b1c0"
+			uint256 n = ens.length;
+			dns = new bytes(n + 2); // always 2 larger: [a.b  ] => [1a1b0]
 			assembly {
-				let p := add(str, 32)
+				let p := add(ens, 32)
 				let q := add(dns, 32)
 				let r := q
 				function check(a, b) {
 					let w := sub(b, a)
-					if or(eq(a, b), gt(w, 255)) {
+					if or(eq(a, b), gt(w, 255)) { // empty or too long
 						let x := mload(64)
 						mstore(x, 0x2bb9acf700000000000000000000000000000000000000000000000000000000)
-						revert(x, 4)
+						revert(x, 4) // revert with BadInput()
 					}
-					mstore8(a, w)
+					mstore8(a, w) // store length
 				} 
 				for { let i := 0 } lt(i, n) { i := add(i, 1) } {
 					let b := shr(248, mload(add(p, i)))
-					if eq(b, 46) {
+					if eq(b, 46) { // found a "."
 						check(r, q)
 						r := add(q, 1)
 					} {
@@ -228,28 +217,22 @@ contract TNS is Ownable, IERC165 {
 			}
 		}
 	}
-
-	function isNull(bytes memory v) internal pure returns (bool) {
-		uint256 p;
-		uint256 e;
-		assembly { 
-			p := add(v, 32)
-			e := add(p, mload(v))
-		}
-		while (p < e) {
-			uint256 word;
-			assembly {
-				word := mload(p) 
-				p := add(p, 32)
+	function isNull(bytes memory v) internal pure returns (bool ret) {
+		assembly {
+			let p := add(v, 32)
+			let e := add(p, mload(v))
+			for { ret := true } lt(p, e) { p := add(p, 32) } {
+				if gt(mload(p), 0) { // assumes padded
+					ret := false
+					break
+				}
 			}
-			if (word != 0) return false;
 		}
-		return true;
 	}
-	bytes32 constant RADIX = 0x3031323334353637383961626364656600000000000000000000000000000000;
+	bytes32 constant HEX_TABLE = 0x3031323334353637383961626364656600000000000000000000000000000000;
 	function toHex(bytes memory v) internal pure returns (string memory) {
 		unchecked {
-			bytes memory u = new bytes((v.length + 1) << 1);
+			bytes memory u = new bytes(2 + (v.length << 1));
 			assembly {
 				mstore8(add(u, 32), 0x30) // 0
 				mstore8(add(u, 33), 0x78) // x
@@ -259,9 +242,9 @@ contract TNS is Ownable, IERC165 {
 				for {} lt(i, e) {} {
 					i := add(i, 1) 
 					let b := mload(i)
-					mstore8(j, byte(and(shr(4, b), 15), RADIX))
+					mstore8(j, byte(and(shr(4, b), 15), HEX_TABLE))
 					j := add(j, 1)
-					mstore8(j, byte(and(b, 15), RADIX))
+					mstore8(j, byte(and(b, 15), HEX_TABLE))
 					j := add(j, 1)
 				}
 			}
