@@ -132,7 +132,7 @@ contract TNS is Ownable, IERC165 {
 		bytes memory name0 = getTiny(SLOT_BASENAME);
 		bytes32 node0 = dns_from_ens(name0).namehash(0);
 		address resolver0 = ENS(ENS_REGISTRY).resolver(node0);
-		bytes memory name = dns_from_ens(abi.encodePacked(tick, '.', name0));
+		bytes memory name = dns_from_ens(bytes(tick).length > 0 ? abi.encodePacked(tick, '.', name0) : name0);
 		bytes32 node = name.namehash(0);
 		(bool ok, bytes memory v) = resolver0.staticcall(abi.encodeCall(IExtendedResolver.resolve, (
 			name, 
@@ -156,8 +156,8 @@ contract TNS is Ownable, IERC165 {
 	function lookupOnchain(bytes32 node, bytes[] memory values) internal view returns (KV[] memory kv) {
 		unchecked {
 			string[] memory names = fieldNames();
-			if (names.length != values.length) revert Modified(); // number of records are different (rare)
-			bytes[] memory calls = this.makeCalls(node); // technically these could be diff (extremely rare)
+			if (names.length != values.length) revert Modified();
+			bytes[] memory calls = this.makeCalls(node);
 			address resolver = ENS(ENS_REGISTRY).resolver(node);
 			uint256 n;
 			kv = new KV[](values.length);
